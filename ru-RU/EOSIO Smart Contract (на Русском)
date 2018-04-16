@@ -1,0 +1,383 @@
+<h1>EOSIO смарт-контракты (техническая бумага)</h1>
+Oригинал: <a href="https://github.com/EOSIO/eos/wiki/Smart-Contract">https://github.com/EOSIO/eos/wiki/Smart-Contract</a>
+
+<a href="#introduction-to-eos-smart-contract">Введение в EOSIO смарт-контракты</a>
+<ul>
+<li><a href="#required-background-knowledge">Требуемые навыки </a></li>
+<li><a href="#basics-of-eos-smart-contract">Основы смарт-контрактов в EOSIO</a></li>
+<li><a href="#technical-limitation">Технические ограничения</a></li>
+</ul>
+
+<a href="#smart-contract-files">Файлы в смарт-контрактах</a>
+<ul>
+<li><a href="#hpp">hpp</a></li>
+<li><a href="#cpp">cpp</a></li>
+<li><a href="#wast">wast</a></li>
+<li><a href="#abi">abi</a></li>
+</ul>
+
+<a href="#debugging-smart-contract">Отладка смарт-контракта</a>
+<ul>
+<li><a href="#method">Метод</a></li>
+<li><a href="#print">Print</a></li>
+<li><a href="#example">Пример</a></li>
+</ul>
+
+<h2>Введение в EOSIO смарт-контракты</h2>
+
+<hr/>
+
+<h3 class="anchor" href="#required-background-knowledge">Требуемые навыки</h3>
+
+<p><strong>Знание C / C++</strong></p>
+
+<p>На основе EOSIO блокчейнов, можно компилировать пользовательские приложения в бинарный формат Web Assembly (WASM). WASM - это новый формат байт-кода который пользуется широкой поддержкой Google, Microsoft, Apple, и т.д.  Самым лучшим набором инструментов для разработки приложений компилируемых в WASM на сегодня является clang/llvm с C/C++ компилятором.</p>
+
+<p>Rust, Python, и Solidity также могут использоваться при разработке приложений третьими лицами. Не смотря на то что эти языки покажуться более простыми, нужно понимать что они не всегда позволяют осуществить желаемое масштабирование приложения. Мы ожидаем что C++ станет самым оптимальным языком для разработки качественных и надежных смарт-контрактов.</p>
+
+<p><strong>Опыт работы с Linux / Mac OS</strong></p>
+
+<p>Программное обеспечение EOSIO поддерживает следующие операционные системы:</p>
+<ul>
+<li>Amazon 2017.09 и выше</li>
+<li>Centos 7</li>
+<li>Fedora 25 и выше (предпочтение: Fedora 25)</li>
+<li>Mint 18</li>
+<li>Ubuntu 16.04 (предпочтение: Ubuntu 16.10)</li>
+<li>MacOS Darwin 10.12 и выше (предпочтение: MacOS 10.13.x)</li>
+</ul>
+<p><strong>Знание командных строк</strong></p>
+<p>Из-за множества инструментов которые нужно освоить чтобы работать с EOSIO, необходимы базовые знания командных строк.</p>
+
+<h3 class="anchor" href="#basics-of-eosio-smart-contract">Основы смарт-контрактов в EOSIO</h3>
+
+<p><strong>Коммуникационная модель</strong></p>
+
+<p>Коммуникация между смарт-контрактами в EOSIO осуществляется через сообщения и общую память, которая позволяет обеспечить доступ к данным. Соответственно, каждый контракт может прочесть базу данных другого контракта, если он входит в область чтения транзакции с атрибутом async vibe. Асинхронная коммуникация может привести к распространению спама, который уничтожается с помощью алгоритма в условиях ограниченных ресурсов. Существуют 2 способа коммуникации в системе смарт-контракта:</p>
+<ul>
+<li>
+<p><strong>Строчная.</strong> В случаи строчной коммуникации, транзакция должна либо осуществится немедленно, либо нет. При этом никаких уведомлений не отправляется, не смотря на статус транзакции. Строчная коммуникация осуществляется в тех же условиях что и исходная транзакция. 
+</p>
+</li>
+<li>
+<p><strong>Отстроченная.</strong> Субьект может, на свое усмотрение, отстрачивать проведение транзакции; при этом возможна отправка уведомлений как по завершению операции, так и при перерывах в работе. Отстроченная коммуникация может охватывать разные сферы и достигать того же статуса что и исходный контракт. </p>
+</li>
+</ul>
+<p><strong>Действие против транзакции</strong></p>
+<p>В отличии от действия, которое всегда обозначает одну операцию, транзакция - это зачастую совокупность нескольких операций. Контракт и аккаунт коммуницируют через действия. В зависимости от цели коммуникации, можно отправлять как одно действие, так и комбинацию действий в рамках одной транзакции. </p>
+<p><em>Транзакция с 1им действием </em>.</p>
+<pre lang="base"><code>{
+  "expiration": "2018-04-01T15:20:44",
+  "region": 0,
+  "ref_block_num": 42580,
+  "ref_block_prefix": 3987474256,
+  "net_usage_words": 21,
+  "kcpu_usage": 1000,
+  "delay_sec": 0,
+  "context_free_actions": [],
+  "actions": [{
+      "account": "eosio.token",
+      "name": "issue",
+      "authorization": [{
+          "actor": "eosio",
+          "permission": "active"
+        }
+      ],
+      "data": "00000000007015d640420f000000000004454f5300000000046d656d6f"
+    }
+  ],
+  "signatures": [
+    ""
+  ],
+  "context_free_data": []
+}
+</code></pre>
+<p><em>Транзакция с несколькими действиями</em> (успешными или неудачными)
+</p>
+<pre lang="base"><code>{
+  "expiration": "...",
+  "region": 0,
+  "ref_block_num": ...,
+  "ref_block_prefix": ...,
+  "net_usage_words": ..,
+  "kcpu_usage": ..,
+  "delay_sec": 0,
+  "context_free_actions": [],
+  "actions": [{
+      "account": "...",
+      "name": "...",
+      "authorization": [{
+          "actor": "...",
+          "permission": "..."
+        }
+      ],
+      "data": "..."
+    }, {
+      "account": "...",
+      "name": "...",
+      "authorization": [{
+          "actor": "...",
+          "permission": "..."
+        }
+      ],
+      "data": "..."
+    }
+  ],
+  "signatures": [
+    ""
+  ],
+  "context_free_data": []
+}
+</code></pre>
+<p><strong>Ограничения имени действия </strong></p>
+<p>Все виды действий - это 64-битные целые числа на base32-кодировании. Это значит, что они ограничены буквами a-z, 1-5, и ‘.’ для первых 12 символов. Для 13-го символа используется лимит 16ти символов (‘.’ a-p).</p>
+<p><strong>Подтверждение транзакции</strong></p>
+<p>Получение хеша транзакции не означает подтверждение проведения этой транзакции. Это лишь значит что транзакция достигла узла без ошибок и есть большая вероятность, что она будет принята другими субьектами. </p>
+<p>Чтобы проверить подтверждение, нужно найти транзакцию, вместе с номером блока в котором она хранится, в истории транзакций. </p>
+
+<h2 class="anchor" href="#smart-contract-files">Файлы в смарт-контрактах</h2>
+<hr/>
+
+<p>Чтобы облегчить задачу, мы создали инструмент под названием eosiocpp, который можно использовать для загрузки нового контракта. eosiocpp автоматически создает три файла с начальными параметрами в смарт-контракте. </p>
+<pre lang="base"><code>$ eosiocpp -n ${contract}
+</code></pre>
+<p>Предыдущая команда создаст новый проект <code>./${project}</code> в папке с 3-ма файлами:</p> 
+<pre lang="base"><code>${contract}.abi ${contract}.hpp ${contract}.cpp
+</code></pre>
+
+<h3 class="anchor" href="#hpp">hpp</h3>
+<p><code>${contract}.hpp</code> это заголовочный файл, содержащий переменные, константы, и функции, на которые ссылается .cpp файл.
+</p>
+<h3 class="anchor" href="#cpp">cpp</h3>
+<p><code>${contract}.cpp</code>это исходный файл, содержащий функции контракта.</p>
+<p>Если генерировать .cpp файл с помощью eosiocpp, созданный файл будет выглядеть примерно вот так:</p>
+
+<pre lang="base"><code>#include &lt;${contract}.hpp&gt;
+
+/**
+ *  The init() and apply() methods must have C calling convention so that the blockchain can lookup and
+ *  call these methods.
+ */
+extern "C" {
+
+    /**
+     *  This method is called once when the contract is published or updated.
+     */
+    void init()  {
+       eosio::print( "Init World!\n" ); // Replace with actual code
+    }
+
+    /// The apply method implements the dispatch of actions to this contract
+    void apply( uint64_t code, uint64_t action ) {
+       eosio::print( "Hello World: ", eosio::name(code), "-&gt;", eosio::name(action), "\n" ); 
+    }
+
+} // extern "C"
+</code></pre>
+
+<p>В этом примере есть две функции - init и apply. Их единственная функция - это регистрация проведенных действий, без последующих верификаций. Любое действие может быть произведено в любое время, по разрешению производителя блока. В случаи отсутствия нужных подписей, на контракт выставляется счет за потребленные ресурсы. </p>
+<p><strong>init</strong></p>
+<p>Функция init применяется только один раз, при первоначальном развертывании, с целью инициализации переменных контракта (например, снабжение токенов для валютного контракта). </p>
+<p><strong>apply</strong></p>
+<p><code>apply</code> Функция apply применяется для обработки действий, реагируя на все входящие действия в соответствии с техническими характеристиками. Эта функция требует задания двух входных параметров - code и action.</p>
+<p><strong>code filter</strong></p>
+<p>Чтобы среагировать на любое действие, нужно структурировать функцию apply следующим образом. Вы также можете создать ответы на общие действия, опуская code filter. </p>
+<pre lang="base"><code>if (code == N(${contract_name}) {
+    // your handler to respond to particular action
+}
+</code></pre>
+<p>Вы также можете определить ответы на соответствующие действия в блоке кода.</p>
+
+<p><strong>action filter</strong></p>
+<p>Чтобы среагировать на любое действие, нужно структурировать функцию apply следующим образом. В большинстве случаев, эта структура используется в связке с code filter. </p>
+<pre lang="base"><code>if (action == N(${action_name}) {
+    //your handler to respond to a particular action
+}
+</code></pre>
+<h3 class="anchor" href="#wast">wast</h3>
+<p>Каждая программа, которая применяется к EOSIO блокчейну, должна быть компилирована в WASM формат. Это единственный формат, который принимает блокчейн. </p>
+<p>Как только CPP файл получен, вы можете компилировать его в текстовую версию WASM (.wast), используя eosiocpp. </p>
+<pre lang="base"><code>$ eosiocpp -o ${contract}.wast ${contract}.cpp
+</code></pre>
+
+<h3 class="anchor" href="#abi">abi</h3>
+<p>Двоичный интерфейс приложений (ABI) - это JSON инструкция по конвертации действий пользователя между двумя их форматами, JSON и бинарном. ABI также дает описание процессу конвертации состояния базы даных с/в JSON. Только после того, как контракт получит API описание, разработчики и пользователи смогут успешно взаимодействовать с ним через JSON. </p>
+
+<p>Файл ABI может быть сгенерирован из файлов .hpp с помощью инструмента eosiocpp:</p>
+<pre lang="base"><code>$ eosiocpp -g ${contract}.abi ${contract}.hpp
+</code></pre>
+
+<p>Вот как выглядит пример базового ABI контракта: </p>
+<pre lang="base"><code>{
+  "types": [{
+      "new_type_name": "account_name",
+      "type": "name"
+    }
+  ],
+  "structs": [{
+      "name": "transfer",
+      "base": "",
+      "fields": {
+        "from": "account_name",
+        "to": "account_name",
+        "quantity": "uint64"
+      }
+    },{
+      "name": "account",
+      "base": "",
+      "fields": {
+        "account": "name",
+        "balance": "uint64"
+      }
+    }
+  ],
+  "actions": [{
+      "action": "transfer",
+      "type": "transfer"
+    }
+  ],
+  "tables": [{
+      "table": "account",
+      "type": "account",
+      "index_type": "i64",
+      "key_names" : ["account"],
+      "key_types" : ["name"]
+    }
+  ]
+}
+</code></pre>
+<p>Можно заметить, что ABI определяет действие transfer типа transfer. Это говорит EOSIO, что ${account}->transfer обозначает полезнуя нагрузку типа transfer. Тип transfer обозначается в массиве stracts, в обьекте с name, напротив transfer. </p>
+<pre lang="base"><code>...
+  "structs": [{
+      "name": "transfer",
+      "base": "",
+      "fields": {
+        "from": "account_name",
+        "to": "account_name",
+        "quantity": "uint64"
+      }
+    },{
+...
+</code></pre>
+<p>В ABI есть несколько полей, включая from, to, и quantity. Эти поля соотносятся с типами account_name и uint64. account_name - это встроенный тип данных, который обозначает строку base32 как uint64. Узнать больше о доступных встроенных типах данных можно <a href="https://github.com/EOSIO/eos/blob/master/libraries/chain/contracts/abi_serializer.cpp">здесь</a>.</p>
+<pre lang="base"><code>{
+  "types": [{
+      "new_type_name": "account_name",
+      "type": "name"
+    }
+  ],
+...
+</code></pre>
+<p>Выше, в приведенных массивах типов, мы обозначаем список псевдонимов для существующих типов. Здесь мы заменяем account_name псевдонимом name. </p>
+
+<h2 class="anchor" href="#debugging-smart-contract">Отладка смарт-контракта </h2>
+<hr/>
+
+<p>Для того чтобы осуществить отладку смарт-контракта, нужно настроить локальный nodeos, который может оперировать как отдельная, закрытая тестовая сеть или же как продление открытой тестовой сети (или официальной тестовой сети).</p>
+<p>Если смарт-контракт создается в первый раз, рекомендуется сначала протестировать и отладить его на закрытой тестовой сети, так как при этом контролируется весь блокчейн. Это позволит иметь неограниченное число eos; к тому же вы в любое время сможете перезапустить процесс. Как только все готово к запуску, контракт можно отладить на открытой (или официальной) тестовой сети путем подключения локального nodeos к этой сети так, чтобы регистрация тестовой сети отображалась в локальном nodeos. </p>
+<p>Больше об отладке на закрытой тестовой сети, которая осуществляется по тому же принципу, можно будет найти в следующем руководстве. </p>
+<p>Если вы еще не настроили локальный nodeos, <a href="https://github.com/EOSIO/eos/wiki/Local-Environment">здесь</a> вы сможете найти подробное руководство. По умолчанию, ваш локальный nodeos будет работать на закрытой тестовой сети до тех пор, пока не будут изменен файл config.ini для подключения к публичной (частной) сети, как описано в этом <a href="Testnet%3A%20Public">руководстве</a>.</p>
+
+
+<h3 class="anchor" href="#method">Метод</h3>
+<p>Грубая отладка - это главный метод, который используется в отладке смарт-контрактов. Этот метод основывается на утилизации Printing функционала. Цель: исследовать ценность переменной и проверять течение смарт-контракта. В смарт-контракте, Printing осуществляется через Print API (C и C++). C++ API - это обертка для  С+ API в связи с чем мы, в основном, будем использовать только C++ API.</p>
+
+<h3 class="anchor" href="#print">Print</h3>
+<p>Print C API поддерживает следующие форматы данных:</p>
+<ul>
+<li>prints - нуль-терминированный массив символов (строка)</li>
+<li>prints_l - любой массив символов (строка) данного размера</li>
+<li>printi - 64-битные целые числа без знака</li>
+<li>printi128 - 128-битные целые числа без знака</li>
+<li>printd - 64-битные целые числа без знака на двойном кодировании</li>
+<li>printn - 64-битные целые числа на base32-кодировании</li>
+<li>printhex - двоичность данных и их размера в шестнадцатеричной системе счисления</li>
+</ul>
+<p>Некоторые типы данных C API из вышеперечисленных покрываются Print C++ API. Поэтому пользователь не должен определять какую именно print функцию нужно использовать. Print C++ API поддерживает</p>
+<ul>
+<li>нуль-терминированный массив символов (строка)</li>
+<li>целые числа (128-битные без знака, 64-битные без знака, 32-битные без знака, со знаком, без знака)</li>
+<li>64-битные целые числа на base32-кодировании</li>
+<li>struct с print() методом</li>
+</ul>
+<h3 class="anchor" href="#example">Пример</h3>
+<p>Давайте напишем новый контракт как пример для отладки:</p>
+<ul>
+<li>debug.hpp</li>
+</ul>
+<div class="highlight highlight-source-c++"><pre>#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">&lt;</span>eoslib/eos.hpp<span class="pl-pds">&gt;</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">&lt;</span>eoslib/db.hpp<span class="pl-pds">&gt;</span></span>
+
+<span class="pl-k">namespace</span> <span class="pl-en">debug</span> {
+    <span class="pl-k">struct</span> <span class="pl-en">foo</span> {
+        account_name from;
+        account_name to;
+        <span class="pl-c1">uint64_t</span> amount;
+        <span class="pl-k">void</span> <span class="pl-en">print</span>() <span class="pl-k">const</span> {
+            <span class="pl-c1">eosio::print</span>(<span class="pl-s"><span class="pl-pds">"</span>Foo from <span class="pl-pds">"</span></span>, <span class="pl-c1">eosio::name</span>(from), <span class="pl-s"><span class="pl-pds">"</span> to <span class="pl-pds">"</span></span>,<span class="pl-c1">eosio::name</span>(to), <span class="pl-s"><span class="pl-pds">"</span> with amount <span class="pl-pds">"</span></span>, amount, <span class="pl-s"><span class="pl-pds">"</span><span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+        }
+    };
+}</pre></div>
+<ul>
+<li>debug.cpp</li>
+</ul>
+<div class="highlight highlight-source-c++"><pre>#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">&lt;</span>debug.hpp<span class="pl-pds">&gt;</span></span>
+
+<span class="pl-k">extern</span> <span class="pl-s"><span class="pl-pds">"</span>C<span class="pl-pds">"</span></span> {
+
+    <span class="pl-k">void</span> <span class="pl-en">init</span>()  {
+    }
+
+    <span class="pl-k">void</span> <span class="pl-en">apply</span>( <span class="pl-c1">uint64_t</span> code, <span class="pl-c1">uint64_t</span> action ) {
+        <span class="pl-k">if</span> (code == <span class="pl-c1">N</span>(debug)) {
+            <span class="pl-c1">eosio::print</span>(<span class="pl-s"><span class="pl-pds">"</span>Code is debug<span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+            <span class="pl-k">if</span> (action == <span class="pl-c1">N</span>(foo)) {
+                 <span class="pl-c1">eosio::print</span>(<span class="pl-s"><span class="pl-pds">"</span>Action is foo<span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+                debug::foo f = eosio::current_message&lt;debug::foo&gt;();
+                <span class="pl-k">if</span> (f.<span class="pl-smi">amount</span> &gt;= <span class="pl-c1">100</span>) {
+                    <span class="pl-c1">eosio::print</span>(<span class="pl-s"><span class="pl-pds">"</span>Amount is larger or equal than 100<span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+                } <span class="pl-k">else</span> {
+                    <span class="pl-c1">eosio::print</span>(<span class="pl-s"><span class="pl-pds">"</span>Amount is smaller than 100<span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+                    <span class="pl-c1">eosio::print</span>(<span class="pl-s"><span class="pl-pds">"</span>Increase amount by 10<span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+                    f.<span class="pl-smi">amount</span> += <span class="pl-c1">10</span>;
+                    <span class="pl-c1">eosio::print</span>(f);
+                }
+            }
+        }
+    }
+} <span class="pl-c"><span class="pl-c">//</span> extern "C"</span></pre></div>
+<ul>
+<li>debug.hpp</li>
+</ul>
+<div class="highlight highlight-source-c++"><pre>{
+  <span class="pl-s"><span class="pl-pds">"</span>structs<span class="pl-pds">"</span></span>: [{
+      <span class="pl-s"><span class="pl-pds">"</span>name<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>foo<span class="pl-pds">"</span></span>,
+      <span class="pl-s"><span class="pl-pds">"</span>base<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span><span class="pl-pds">"</span></span>,
+      <span class="pl-s"><span class="pl-pds">"</span>fields<span class="pl-pds">"</span></span>: {
+        <span class="pl-s"><span class="pl-pds">"</span>from<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>account_name<span class="pl-pds">"</span></span>,
+        <span class="pl-s"><span class="pl-pds">"</span>to<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>account_name<span class="pl-pds">"</span></span>,
+        <span class="pl-s"><span class="pl-pds">"</span>amount<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>uint64<span class="pl-pds">"</span></span>
+      }
+    }
+  ],
+  <span class="pl-s"><span class="pl-pds">"</span>actions<span class="pl-pds">"</span></span>: [{
+      <span class="pl-s"><span class="pl-pds">"</span>action_name<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>foo<span class="pl-pds">"</span></span>,
+      <span class="pl-s"><span class="pl-pds">"</span>type<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>foo<span class="pl-pds">"</span></span>
+    }
+  ]
+}
+</pre></div>
+<p>Теперь нужно развернуть его и отправить на него сообщение. Допустим что у вас есть debug аккаунт и ключ к нему в вашем кошельке. </p>
+<div class="highlight highlight-source-shell"><pre>$ eosiocpp -o debug.wast debug.cpp
+$ cleos <span class="pl-c1">set</span> contract debug debug.wast debug.abi
+$ cleos push message debug foo <span class="pl-s"><span class="pl-pds">'</span>{"from":"inita", "to":"initb", "amount":10}<span class="pl-pds">'</span></span> --scope debug</pre></div>
+<p>Когда вы проверите свой локальный nodeos node log, вы увидите следующие строки, после того как указанное выше сообщение будет отправлено: </p>
+<pre><code>Code is debug
+Action is foo
+Amount is smaller than 100
+Increase amount by 10
+Foo from inita to initb with amount 20
+</code></pre>
+<p>Здесь вы сможете подтвердить, что ваше сообщение направляется в правильный поток управления и что указанная сумма - верная. Вы сможете видеть указанное выше сообщение как минимум два раза, что является совершенно нормальным так как каждая транзакция запускается во время верификации, проверки блока и его запуска. </p>
+
+
